@@ -51,7 +51,7 @@ from sglang.srt.model_loader.weight_utils import (
 from sglang.srt.utils import add_prefix, make_layers
 
 Qwen2Config = None
-
+import nvtx
 
 logger = logging.getLogger(__name__)
 
@@ -87,10 +87,14 @@ class Qwen2MLP(nn.Module):
             )
         self.act_fn = SiluAndMul()
 
+    @nvtx.annotate("Qwen2MLP.forward", color="red")
     def forward(self, x):
-        gate_up, _ = self.gate_up_proj(x)
-        x = self.act_fn(gate_up)
-        x, _ = self.down_proj(x)
+        with nvtx.annotate("gate_up_proj", color="blue"):
+            gate_up, _ = self.gate_up_proj(x)
+        with nvtx.annotate("act_fn", color="green"):
+            x = self.act_fn(gate_up)
+        with nvtx.annotate("down_proj", color="yellow"):
+            x, _ = self.down_proj(x)
         return x
 
 
@@ -164,17 +168,23 @@ class Qwen2Attention(nn.Module):
             prefix=add_prefix("attn", prefix),
         )
 
+    @nvtx.annotate("Qwen2Attention.forward", color="red")
     def forward(
         self,
         positions: torch.Tensor,
         hidden_states: torch.Tensor,
         forward_batch: ForwardBatch,
     ) -> torch.Tensor:
-        qkv, _ = self.qkv_proj(hidden_states)
-        q, k, v = qkv.split([self.q_size, self.kv_size, self.kv_size], dim=-1)
-        q, k = self.rotary_emb(positions, q, k)
-        attn_output = self.attn(q, k, v, forward_batch)
-        output, _ = self.o_proj(attn_output)
+        with nvtx.annotate("qkv_proj", color="blue"):
+            qkv, _ = self.qkv_proj(hidden_states)
+        with nvtx.annotate("split_qkv", color="green"):
+            q, k, v = qkv.split([self.q_size, self.kv_size, self.kv_size], dim=-1)
+        with nvtx.annotate("rotary_emb", color="yellow"):
+            q, k = self.rotary_emb(positions, q, k)
+        with nvtx.annotate("attn", color="purple"):
+            attn_output = self.attn(q, k, v, forward_batch)
+        with nvtx.annotate("o_proj", color="orange"):
+            output, _ = self.o_proj(attn_output)
         return output
 
 

@@ -5,6 +5,21 @@ This script does not launch a server and uses the low-level APIs.
 It accepts server arguments (the same as launch_server.py) and benchmark arguments (e.g., batch size, input lengths).
 
 # Usage (latency test)
+
+
+
+
+python -m sglang.bench_one_batch --model-path /shared/public/sharing/job-rank/kbehdin/f13e0932582c449dda4d-2025-05-06-21-33-49/best_model/epoch=1-step=2242-HF --input-len 700 --output-len 1 --profile --batch 10
+
+python -m sglang.bench_one_batch --model-path /shared/public/sharing/yzhang16/qwen2.5_0.5B --input-len 700 --output-len 1 --batch 10
+
+
+
+nsys profile --stats=true --output=profileqwen0.5b_bz10 --trace=cuda,nvtx --force-overwrite=true python -m sglang.bench_one_batch --model-path /shared/public/sharing/yzhang16/qwen2.5_0.5B --input-len 700 --output-len 1 --dtype float16
+
+nsys profile --stats=true --output=profileqwen0.5b_bz10 --trace=cuda,nvtx --force-overwrite=true python -m sglang.bench_one_batch --model-path /shared/public/sharing/yzhang16/qwen2.5_0.5B --input-len 700 --output-len 1 --batch 10 --chunked-prefill-size -1 --enable-torch-compile --dtype float16 --mem-fraction-static 0.6 --enable-tokenizer-batch-encode --batch 50 --input-len 700 --output-len 1 --disable-cuda-graph --correct --cut-len 600
+
+
 ## with dummy weights:
 python -m sglang.bench_one_batch --model-path meta-llama/Meta-Llama-3-8B-Instruct --load-format dummy
 ## sweep through multiple data points and store (append) the results in a jsonl file:
@@ -74,6 +89,7 @@ from sglang.srt.utils import (
     set_gpu_proc_affinity,
     suppress_other_loggers,
 )
+import nvtx
 
 
 @dataclasses.dataclass
@@ -326,7 +342,7 @@ def correctness_test(
 def synchronize(device):
     torch.get_device_module(device).synchronize()
 
-
+@nvtx.annotate("latency_test_run_once", color="red")
 def latency_test_run_once(
     run_name,
     model_runner,
